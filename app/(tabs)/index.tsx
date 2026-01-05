@@ -1,15 +1,11 @@
-import { Pressable, StyleSheet, Text, TextInput, View, ScrollView, Alert, SectionList } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View, Alert, SectionList } from "react-native";
 import { scale } from "react-native-size-matters";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from '@expo/vector-icons';
+import { useDispatch, useSelector } from "react-redux";
+import type { RootState, AppDispatch } from "@/store";
+import { addTask, updateTask, deleteTask, Task } from "@/store/tasksSlice";
 
-import React, { useEffect, useRef, useState } from 'react'
-
-type Task = {
-    id: string,
-    text: string,
-    createdAt: number,
-}
+import React, { useEffect, useRef, useState } from 'react';
 
 type TaskSection = {
     title: string,
@@ -17,55 +13,25 @@ type TaskSection = {
 }
 
 const Home = () => {
+    const dispatch = useDispatch<AppDispatch>();
+    const tasks = useSelector((state: RootState) => state.tasks.tasks)
+
     const [taskInput, setTaskInput] = useState("");
-    const [tasks, setTasks] = useState<Task[]>([]);
+    // const [tasks, setTasks] = useState<Task[]>([]);
     const [editingId, setEditingId] = useState<string | null>(null);
     const inputRef = useRef<TextInput>(null);
 
     const handleAddOrUpdate = () => {
         if (!taskInput.trim()) return;
-
-        if (editingId !== null) {
-            setTasks(
-                prevTasks => prevTasks.map((task) => (
-                    task.id === editingId ? { text: taskInput, id: task.id, createdAt: task.createdAt } : task
-                ))
-            )
+        if (editingId) {
+            dispatch(updateTask({ id: editingId, text: taskInput, createdAt: Date.now() }))
             setEditingId(null);
         } else {
-            setTasks(prevTasks => [...prevTasks, { text: taskInput, id: Date.now().toString(), createdAt: Date.now() }])
+            dispatch(addTask({ id: Date.now().toString(), text: taskInput, createdAt: Date.now() }));
         }
-
         setTaskInput("");
     }
 
-    const saveTasks = async (tasks: Task[]) => {
-        try {
-            await AsyncStorage.setItem("tasks", JSON.stringify(tasks))
-        } catch (error) {
-            console.log("Error saving todos", error)
-        }
-    }
-
-    const loadTasks = async () => {
-        try {
-            const storedTasks = await AsyncStorage.getItem("tasks")
-            if (storedTasks) {
-                return JSON.parse(storedTasks);
-            }
-            return [];
-        } catch (error) {
-            console.log("Error loading todos", error);
-        }
-    }
-
-    useEffect(() => {
-        loadTasks().then(setTasks);
-    }, [])
-
-    useEffect(() => {
-        saveTasks(tasks);
-    }, [tasks])
 
     function onDelete(taskId: string) {
         Alert.alert(
@@ -79,11 +45,7 @@ const Home = () => {
                 {
                     text: "Delete",
                     onPress: () => {
-                        setTasks(
-                            tasks.filter((task) => (
-                                task.id !== taskId
-                            ))
-                        )
+                        dispatch(deleteTask({ id: taskId, text: "", createdAt: 0 }))
                         setTaskInput("");
                         setEditingId(null);
                     }
@@ -93,9 +55,9 @@ const Home = () => {
         )
     }
 
-    function onEdit(taskToEdit: string, id: string) {
+    function onEdit(taskToEdit: string, taskId: string) {
         setTaskInput(taskToEdit);
-        setEditingId(id);
+        setEditingId(taskId);
     }
 
     useEffect(() => {
@@ -166,6 +128,7 @@ const Home = () => {
             </View>
 
             <SectionList
+                keyboardShouldPersistTaps={"handled"}
                 contentContainerStyle={{ alignItems: "center", gap: scale(4) }}
                 style={styles.taskList}
                 showsVerticalScrollIndicator={false}
@@ -183,6 +146,9 @@ const Home = () => {
                             </Pressable>
                             <Pressable style={styles.editButton} onPress={() => onEdit(item.text, item.id)}>
                                 <Ionicons name="create-outline" size={16} color="white" />
+                            </Pressable>
+                            <Pressable style={styles.archiveButton} onPress={() => ""}>
+                                <Ionicons name="archive" size={16} color="lightblue" />
                             </Pressable>
                         </View>
                     </View>
@@ -261,6 +227,12 @@ const styles = StyleSheet.create({
     },
     editButton: {
         backgroundColor: "blue",
+        borderRadius: scale(4),
+        padding: scale(4),
+        outlineWidth: 0,
+    },
+    archiveButton: {
+        backgroundColor: "darkblue",
         borderRadius: scale(4),
         padding: scale(4),
         outlineWidth: 0,
