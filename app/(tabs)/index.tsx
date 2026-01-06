@@ -3,7 +3,7 @@ import { scale } from "react-native-size-matters";
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState, AppDispatch } from "@/store";
-import { addTask, updateTask, deleteTask, Task } from "@/store/tasksSlice";
+import { addTask, updateTask, deleteTask, archiveTask, Task } from "@/store/tasksSlice";
 
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -14,22 +14,23 @@ type TaskSection = {
 
 const Home = () => {
     const dispatch = useDispatch<AppDispatch>();
-    const tasks = useSelector((state: RootState) => state.tasks.tasks)
+    const tasks = useSelector((state: RootState) => state.tasks.tasks);
+    const activeTasks = tasks.filter(task => task.status === "active");
 
     const [taskInput, setTaskInput] = useState("");
-    // const [tasks, setTasks] = useState<Task[]>([]);
     const [editingId, setEditingId] = useState<string | null>(null);
     const inputRef = useRef<TextInput>(null);
 
     const handleAddOrUpdate = () => {
         if (!taskInput.trim()) return;
         if (editingId) {
-            dispatch(updateTask({ id: editingId, text: taskInput, createdAt: Date.now() }))
+            dispatch(updateTask({ id: editingId, text: taskInput }))
             setEditingId(null);
         } else {
             dispatch(addTask({ id: Date.now().toString(), text: taskInput, createdAt: Date.now() }));
         }
         setTaskInput("");
+        inputRef.current?.blur();
     }
 
 
@@ -45,14 +46,22 @@ const Home = () => {
                 {
                     text: "Delete",
                     onPress: () => {
-                        dispatch(deleteTask({ id: taskId, text: "", createdAt: 0 }))
+                        dispatch(deleteTask({ id: taskId }))
                         setTaskInput("");
                         setEditingId(null);
+                        inputRef.current?.blur();
                     }
                 }
             ],
             { cancelable: true }
         )
+    }
+
+    function onArchive(taskId: string) {
+        dispatch(archiveTask({ id: taskId }))
+        setTaskInput("");
+        setEditingId(null);
+        inputRef.current?.blur();
     }
 
     function onEdit(taskToEdit: string, taskId: string) {
@@ -107,12 +116,24 @@ const Home = () => {
         ))
     }
 
-    const groupedTasks = groupTasksByDates(tasks);
+    const groupedTasks = groupTasksByDates(activeTasks);
+
+    function formatTime(timestamp: number) {
+        const date = new Date(timestamp);
+
+        return date.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    }
+
 
     return (
         <View style={styles.container}>
             <View style={styles.inputContainer}>
                 <TextInput
+                    returnKeyType="done"
+                    onSubmitEditing={handleAddOrUpdate}
                     style={styles.input}
                     placeholder="Add new task"
                     value={taskInput}
@@ -139,7 +160,12 @@ const Home = () => {
                 )}
                 renderItem={({ item }) => (
                     <View style={styles.listItem}>
-                        <Text style={styles.taskText}>{item.text}</Text>
+                        <View>
+                            <Text style={styles.taskText}>{item.text}</Text>
+                            <Text style={styles.time}>
+                                {formatTime(item.createdAt)}
+                            </Text>
+                        </View>
                         <View style={styles.buttonContainer}>
                             <Pressable style={styles.deleteButton} onPress={() => onDelete(item.id)}>
                                 <Ionicons name="trash-outline" size={16} color="red" />
@@ -147,8 +173,8 @@ const Home = () => {
                             <Pressable style={styles.editButton} onPress={() => onEdit(item.text, item.id)}>
                                 <Ionicons name="create-outline" size={16} color="white" />
                             </Pressable>
-                            <Pressable style={styles.archiveButton} onPress={() => ""}>
-                                <Ionicons name="archive" size={16} color="lightblue" />
+                            <Pressable style={styles.archiveButton} onPress={() => onArchive(item.id)}>
+                                <Ionicons name="archive-outline" size={16} color="lightblue" />
                             </Pressable>
                         </View>
                     </View>
@@ -193,7 +219,7 @@ const styles = StyleSheet.create({
         fontWeight: "500"
     },
     taskList: {
-        marginTop: scale(15),
+        marginTop: scale(14),
         flex: scale(1),
     },
     groupName: {
@@ -213,7 +239,13 @@ const styles = StyleSheet.create({
     },
     taskText: {
         color: "white",
-        maxWidth: scale(250)
+        maxWidth: scale(250),
+        fontSize: scale(12)
+    },
+    time: {
+        color: "white",
+        marginTop: scale(4),
+        fontSize: scale(8)
     },
     buttonContainer: {
         flexDirection: "row",
